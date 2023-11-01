@@ -161,6 +161,7 @@ function addRole() {
     });
 }
 function addEmployee() {
+  // First, let's prompt for the employee's first name and last name.
   inquirer
     .prompt([
       {
@@ -173,35 +174,83 @@ function addEmployee() {
         message: "Enter the employee's last name:",
         name: 'employeeLastName',
       },
-      {
-        type: 'input',
-        message: "Enter the employee's role ID:",
-        name: 'employeeRoleId',
-      },
-      {
-        type: 'input',
-        message: "Enter the employee's manager's ID (if applicable):",
-        name: 'employeeManagerId',
-      },
     ])
-    .then((answers) => {
-      const employee = {
-        first_name: answers.employeeFirstName,
-        last_name: answers.employeeLastName,
-        role_id: answers.employeeRoleId,
-        manager_id:  parseInt(answers.employeeManagerId),
-      };
-
-      db.query('INSERT INTO Employees SET ?', employee, (err) => {
+    .then((nameAnswers) => {
+      // Prompt for the employee's role.
+      db.query('SELECT id, title FROM role', async (err, roles) => {
         if (err) {
-          console.error('Error adding employee: ' + err);
-        } else {
-          console.log(`Employee "${answers.employeeFirstName} ${answers.employeeLastName}" added successfully.`);
+          console.error('Error while fetching role data: ' + err);
+          startApp();
+          return;
         }
-        startApp();
+
+        const roleChoices = roles.map((role) => ({
+          name: role.title,
+          value: role.id,
+        }));
+
+        inquirer
+          .prompt([
+            {
+              type: 'list',
+              message: 'Select the employee role:',
+              name: 'employeeRoleId',
+              choices: roleChoices,
+            },
+          ])
+          .then((roleAnswers) => {
+            console.log('Selected role ID:', roleAnswers.employeeRoleId); // Add this line to check the selected role ID
+
+            // Prompt for the employee's manager, if applicable.
+            db.query('SELECT id, first_name, last_name FROM Employees', async (err, employees) => {
+              if (err) {
+                console.error('Error while fetching employee data: ' + err);
+                startApp();
+                return;
+              }
+
+              const managerChoices = employees.map((employee) => ({
+                name: `${employee.first_name} ${employee.last_name}`,
+                value: employee.id,
+              }));
+              managerChoices.push({ name: 'None', value: null });
+
+              inquirer
+                .prompt([
+                  {
+                    type: 'list',
+                    message: "Select the employee's manager (if applicable):",
+                    name: 'employeeManagerId',
+                    choices: managerChoices,
+                  },
+                ])
+                .then((managerAnswers) => {
+                  console.log('Selected manager ID:', managerAnswers.employeeManagerId); // Add this line to check the selected manager ID
+
+                  const employee = {
+                    first_name: nameAnswers.employeeFirstName,
+                    last_name: nameAnswers.employeeLastName,
+                    role_id: roleAnswers.employeeRoleId,
+                    manager_id: managerAnswers.employeeManagerId,
+                  };
+
+                  db.query('INSERT INTO Employees SET ?', employee, (err) => {
+                    if (err) {
+                      console.error('Error adding employee: ' + err);
+                    } else {
+                      console.log(
+                        `Employee "${nameAnswers.employeeFirstName} ${nameAnswers.employeeLastName}" added successfully.`
+                      );
+                    }
+                    startApp();
+                  });
+                });
+            });
+          });
       });
     });
 }
+
 
 
 function updateEmployeeRole() {
